@@ -1,0 +1,73 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global default-deny safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Common security helpers
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidUserProfile(data, expectedUid) {
+      return data.keys().hasAll(['uid', 'email', 'displayName', 'registeredAt', 'lastLoginAt']) &&
+             data.keys().hasOnly(['uid', 'email', 'displayName', 'photoURL', 'providerId', 'registeredAt', 'lastLoginAt']) &&
+             data.uid is string && data.uid == expectedUid && data.uid.size() <= 128 &&
+             data.email is string && data.email.size() <= 256 &&
+             data.displayName is string && data.displayName.size() <= 128 &&
+             (!('photoURL' in data) || (data.photoURL is string && data.photoURL.size() <= 1024)) &&
+             (!('providerId' in data) || (data.providerId is string && data.providerId.size() <= 64)) &&
+             data.registeredAt is string && data.registeredAt.size() <= 64 &&
+             data.lastLoginAt is string && data.lastLoginAt.size() <= 64;
+    }
+
+    function isValidAuditLog(data) {
+      return data.keys().hasAll(['userId', 'eventType', 'timestamp', 'email', 'status']) &&
+             data.keys().hasOnly(['userId', 'eventType', 'timestamp', 'email', 'status', 'userAgent']) &&
+             data.userId is string && data.userId == request.auth.uid && data.userId.size() <= 128 &&
+             data.eventType is string && data.eventType in ['signin', 'signup', 'signout'] &&
+             data.timestamp is string && data.timestamp.size() <= 64 &&
+             data.email is string && data.email.size() <= 256 &&
+             data.status is string && data.status in ['success', 'failure'] &&
+             (!('userAgent' in data) || (data.userAgent is string && data.userAgent.size() <= 512));
+    }
+
+    // User profiles collection
+    match /users/{userId} {
+      allow get: if isOwner(userId);
+      allow list: if false; // Disallow querying all users
+      allow create: if isOwner(userId) && isValidId(userId) && isValidUserProfile(incoming(), userId);
+      allow update: if isOwner(userId) && isValidId(userId) && isValidUserProfile(incoming(), userId) &&
+                       incoming().uid == existing().uid &&
+                       incoming().registeredAt == existing().registeredAt;
+      allow delete: if false;
+    }
+
+    // Security audit logs collection
+    match /audit_logs/{logId} {
+      allow get: if isSignedIn() && existing().userId == request.auth.uid;
+      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn() && isValidId(logId) && isValidAuditLog(incoming());
+      allow update, delete: if false; // Immutable audit trail
+    }
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "name": "Google SSO Auth Portal",
+  "description": "Componente React responsive per autenticazione e registrazione con Google Single Sign-On, sistema i18n, store reattivo, error handling e log strutturati.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

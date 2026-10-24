@@ -1,0 +1,86 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User account profile created or synced during Google SSO sign in or sign up",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "maxLength": 256
+        },
+        "displayName": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "photoURL": {
+          "type": "string",
+          "maxLength": 1024
+        },
+        "providerId": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "registeredAt": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "lastLoginAt": {
+          "type": "string",
+          "maxLength": 64
+        }
+      },
+      "required": ["uid", "email", "displayName", "registeredAt", "lastLoginAt"]
+    },
+    "AuditLog": {
+      "title": "AuditLog",
+      "description": "Structured login and signup security event log",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "eventType": {
+          "type": "string",
+          "enum": ["signin", "signup", "signout"],
+          "maxLength": 32
+        },
+        "timestamp": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "maxLength": 256
+        },
+        "status": {
+          "type": "string",
+          "enum": ["success", "failure"],
+          "maxLength": 32
+        },
+        "userAgent": {
+          "type": "string",
+          "maxLength": 512
+        }
+      },
+      "required": ["userId", "eventType", "timestamp", "email", "status"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "User profile collection indexed by user UID"
+    },
+    "/audit_logs/{logId}": {
+      "schema": "AuditLog",
+      "description": "Audit trail logs for authentication events"
+    }
+  }
+}

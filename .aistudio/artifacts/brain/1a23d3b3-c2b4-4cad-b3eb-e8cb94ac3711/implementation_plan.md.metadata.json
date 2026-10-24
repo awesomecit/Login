@@ -1,0 +1,6 @@
+{
+  "summary":  "Piano di implementazione per test di non-regressione con Vitest, configurazione ESLint con SonarJS e Prettier, documentazione README completa per junior dev, attivazione modalità debug (URL o triplo clic) e mappa trasparente del flusso dati Firebase/Firestore.",
+  "updatedAt":  "2026-10-24T11:19:31.306437482Z",
+  "requestFeedback":  true,
+  "userFacing":  true
+}
