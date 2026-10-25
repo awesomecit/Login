@@ -10,6 +10,7 @@ import {
 import {
   getFirestore,
   doc,
+  getDoc,
   getDocFromServer,
   setDoc,
   serverTimestamp,
@@ -110,7 +111,28 @@ export async function testConnection(): Promise<boolean> {
 // Sync user profile to Firestore
 export async function syncUserProfile(user: FirebaseUser, isSignUp: boolean): Promise<UserProfile> {
   const nowIso = new Date().toISOString();
-  const role = getDefaultRoleForEmail(user.email);
+  const userDocRef = doc(db, 'users', user.uid);
+
+  let existingRegisteredAt: string | null = null;
+  let existingRole: any = null;
+
+  try {
+    const existingSnap = await getDoc(userDocRef);
+    if (existingSnap.exists()) {
+      const data = existingSnap.data();
+      existingRegisteredAt = data?.registeredAt || null;
+      existingRole = data?.role || null;
+    }
+  } catch (err) {
+    logger.debug('AuthService', 'Unable to fetch existing user profile from Firestore, treating as prospective new', {
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+
+  // Scrivi registeredAt solo alla prima registrazione!
+  const isFirstRegistration = !existingRegisteredAt;
+  const registeredAt = existingRegisteredAt || nowIso;
+  const role = existingRole || getDefaultRoleForEmail(user.email);
   const permissions = getPermissionsForRole(role);
 
   const userProfile: UserProfile = {
@@ -119,31 +141,40 @@ export async function syncUserProfile(user: FirebaseUser, isSignUp: boolean): Pr
     displayName: user.displayName || user.email?.split('@')[0] || 'User',
     photoURL: user.photoURL || undefined,
     providerId: user.providerData?.[0]?.providerId || 'google.com',
-    registeredAt: nowIso,
+    registeredAt,
     lastLoginAt: nowIso,
     role,
     permissions,
   };
 
   try {
-    await setDoc(
-      doc(db, 'users', user.uid),
-      {
-        uid: userProfile.uid,
-        email: userProfile.email,
-        displayName: userProfile.displayName,
-        ...(userProfile.photoURL ? { photoURL: userProfile.photoURL } : {}),
-        providerId: userProfile.providerId,
-        registeredAt: userProfile.registeredAt,
-        lastLoginAt: userProfile.lastLoginAt,
-        role: userProfile.role,
-      },
-      { merge: true }
-    );
+    const payloadToSave: Record<string, any> = {
+      uid: userProfile.uid,
+      email: userProfile.email,
+      displayName: userProfile.displayName,
+      ...(userProfile.photoURL ? { photoURL: userProfile.photoURL } : {}),
+      providerId: userProfile.providerId,
+      lastLoginAt: userProfile.lastLoginAt,
+    };
+
+    if (isFirstRegistration) {
+      // Scrivi registeredAt e role solo alla prima registrazione
+      payloadToSave.registeredAt = registeredAt;
+      payloadToSave.role = role;
+    } else {
+      // Per gli aggiornamenti preserva i campi immutabili secondo le firestore.rules
+      payloadToSave.registeredAt = existingRegisteredAt;
+      if (existingRole) {
+        payloadToSave.role = existingRole;
+      }
+    }
+
+    await setDoc(userDocRef, payloadToSave, { merge: true });
 
     logger.info('AuthService', `User profile successfully synced in Firestore: ${user.uid}`, {
       email: userProfile.email,
       role: userProfile.role,
+      isFirstRegistration,
       isSignUp,
     });
   } catch (error) {
