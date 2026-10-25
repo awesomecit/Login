@@ -267,15 +267,35 @@ class Store {
       const profile = await syncUserProfile(result.user, isSignUp);
       this.setUser(profile);
 
-      const successMsg = isSignUp
-        ? getTranslation(this.state.currentLang, 'toast.signedUpSuccess')
-        : getTranslation(this.state.currentLang, 'toast.signedInSuccess');
-
-      this.addToast({
-        type: 'success',
-        title: isSignUp ? 'Account Creato' : 'Autenticato',
-        message: successMsg,
-      });
+      if (isSignUp) {
+        if (profile.isFirstRegistration) {
+          this.addToast({
+            type: 'success',
+            title: 'Account Creato',
+            message: getTranslation(this.state.currentLang, 'toast.signedUpSuccess'),
+          });
+        } else {
+          this.addToast({
+            type: 'info',
+            title: 'Account già registrato',
+            message: 'Questa email Google è già registrata. Hai effettuato l\'accesso al tuo profilo esistente.',
+          });
+        }
+      } else {
+        if (profile.isFirstRegistration) {
+          this.addToast({
+            type: 'success',
+            title: 'Nuovo Account Creato',
+            message: 'Nessun account trovato per questa email: è stato creato un nuovo profilo per te.',
+          });
+        } else {
+          this.addToast({
+            type: 'success',
+            title: 'Autenticato',
+            message: getTranslation(this.state.currentLang, 'toast.signedInSuccess'),
+          });
+        }
+      }
 
       this.setState({ isLoading: false });
       return profile;

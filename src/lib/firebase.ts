@@ -199,7 +199,10 @@ export async function syncUserProfile(user: FirebaseUser, isSignUp: boolean): Pr
     logger.debug('AuthService', 'Audit log skipped or restricted by security rules');
   }
 
-  return userProfile;
+  return {
+    ...userProfile,
+    isFirstRegistration,
+  };
 }
 
 export { signInWithPopup, signOut, onAuthStateChanged };

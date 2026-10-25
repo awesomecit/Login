@@ -22,6 +22,7 @@ export interface UserProfile {
   lastLoginAt: string;
   role?: UserRoleV1;
   permissions?: UserPermissionV1[];
+  isFirstRegistration?: boolean;
 }
 
 export interface StructuredLog {

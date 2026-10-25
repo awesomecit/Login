@@ -26,23 +26,24 @@ describe('UserDetailView & LanguageSelector Components', () => {
     expect(screen.getByText('Alex Rivers')).toBeDefined();
     expect(screen.getAllByText('alex@example.com').length).toBeGreaterThan(0);
     expect(screen.getByText('Profilo Personale')).toBeDefined();
-    expect(screen.getByText('Sessione & Sicurezza')).toBeDefined();
     expect(screen.getByText('I Miei Permessi')).toBeDefined();
 
-    // Technical tools should NOT be rendered for standard user
+    // Debug-only tools (Contratti, Sicurezza, Heartbeat, Simulatore) should NOT be rendered when not in debug
     expect(screen.queryByText('Contratti UI & API (Zod)')).toBeNull();
+    expect(screen.queryByText(/Sicurezza & Sessione/i)).toBeNull();
     expect(screen.queryByText(/Heartbeat Test/i)).toBeNull();
     expect(screen.queryByText(/Simulatore di Ruoli RBAC/i)).toBeNull();
   });
 
-  it('renders diagnostic and contract inspection tools for admin or in debug mode', () => {
+  it('renders diagnostic, security session and contract inspection tools in debug mode', () => {
     cleanup();
-    // Simulate admin role or debug mode
     store.setUserRole('admin');
+    store.setDebugMode(true);
 
     render(<UserDetailView />);
     expect(screen.getByText('Dettaglio Risorsa Utente')).toBeDefined();
     expect(screen.getByText('Profilo & Identità OAuth')).toBeDefined();
+    expect(screen.getByText(/Sicurezza & Sessione/i)).toBeDefined();
     expect(screen.getByText('Contratti UI & API (Zod)')).toBeDefined();
     expect(screen.getByText(/Heartbeat Test/i)).toBeDefined();
   });
