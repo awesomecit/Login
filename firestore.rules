@@ -63,10 +63,12 @@ service cloud.firestore {
     match /users/{userId} {
       allow get: if isOwner(userId);
       allow list: if false; // Disallow querying all users
-      allow create: if isOwner(userId) && isValidId(userId) && isValidUserProfile(incoming(), userId);
+      allow create: if isOwner(userId) && isValidId(userId) && isValidUserProfile(incoming(), userId) &&
+                       ((!('role' in incoming()) || incoming().role == 'member') || isAdmin());
       allow update: if isOwner(userId) && isValidId(userId) && isValidUserProfile(incoming(), userId) &&
                        incoming().uid == existing().uid &&
-                       incoming().registeredAt == existing().registeredAt;
+                       incoming().registeredAt == existing().registeredAt &&
+                       ((!('role' in incoming()) && !('role' in existing())) || (incoming().role == existing().role) || isAdmin());
       allow delete: if false;
     }
 
