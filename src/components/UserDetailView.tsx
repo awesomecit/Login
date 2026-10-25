@@ -16,6 +16,7 @@ import {
   Terminal,
   Activity,
   Layers,
+  Settings,
 } from 'lucide-react';
 import { store, useAuthStore } from '../lib/store.ts';
 import { auditTracker } from '../lib/firebase.ts';
@@ -41,8 +42,13 @@ export interface UserDetailViewProps {
 
 export function UserDetailView({ onBack }: UserDetailViewProps) {
   const { user, currentLang, isDebugMode } = useAuthStore();
-  const adminAccess = useRoleAccess('admin');
-  const [activeTab, setActiveTab] = useState<'profile' | 'session' | 'contracts' | 'resources'>('profile');
+  const { isAdmin } = useRoleAccess('admin');
+
+  // Advanced/Debug view is strictly conditional: visible ONLY to ADMIN users or when app is in debug state
+  const showAdvancedDebug = isAdmin || isDebugMode;
+
+  const [activeTab, setActiveTab] = useState<'profile' | 'resources' | 'advanced'>('profile');
+  const [advancedSubTab, setAdvancedSubTab] = useState<'security' | 'contracts'>('security');
   const [, setCopiedKey] = useState<string | null>(null);
   const [sessionDuration, setSessionDuration] = useState(0);
   const [heartbeatCount, setHeartbeatCount] = useState(1);
@@ -54,14 +60,13 @@ export function UserDetailView({ onBack }: UserDetailViewProps) {
 
   const userRole: UserRoleV1 = user?.role || 'member';
   const canAccessDiagnostics = canAccessTestingTools(user, isDebugMode);
-  const canAccessContracts = adminAccess.hasAccess;
 
-  // Se Sicurezza o Contratti vengono disabilitati (quando non siamo in debug mode), torna a profilo
+  // If Advanced/Debug view becomes hidden (e.g. non-admin exits debug mode), fallback to 'profile'
   useEffect(() => {
-    if (!isDebugMode && (activeTab === 'contracts' || activeTab === 'session')) {
+    if (!showAdvancedDebug && activeTab === 'advanced') {
       setActiveTab('profile');
     }
-  }, [isDebugMode, activeTab]);
+  }, [showAdvancedDebug, activeTab]);
 
   // Update session duration counter
   useEffect(() => {
@@ -159,7 +164,7 @@ export function UserDetailView({ onBack }: UserDetailViewProps) {
     setHeartbeatCount((c) => c + 1);
     store.addToast({
       type: 'success',
-      title: 'Heartbeat Inviato [Debug]',
+      title: 'Heartbeat Inviato',
       message: 'Audit log registrato con successo nel tracker di sessione',
       duration: 2500,
     });
@@ -216,7 +221,7 @@ export function UserDetailView({ onBack }: UserDetailViewProps) {
 
   return (
     <div className="space-y-6 max-w-full">
-      {/* Top Action & Navigation Bar (Single Disconnect handled in sticky header, no duplicate Esci) */}
+      {/* Top Header: Single intuitive back navigation; Disconnection is unified in the application sidebar/header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-200">
         <div className="flex items-center gap-3 min-w-0">
           {onBack && (
@@ -260,24 +265,13 @@ export function UserDetailView({ onBack }: UserDetailViewProps) {
             </p>
           </div>
         </div>
-
-        {/* Heartbeat tool: ONLY displayed when isDebugMode is active */}
-        {isDebugMode && (
-          <div className="flex items-center gap-2 shrink-0 self-start sm:self-auto">
-            <button
-              type="button"
-              onClick={handleManualHeartbeat}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-300 rounded-lg transition-colors shadow-2xs cursor-pointer"
-              title="Invia battito di sessione al logger [Debug Only]"
-            >
-              <Activity className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-              <span>Heartbeat Test ({heartbeatCount})</span>
-            </button>
-          </div>
-        )}
       </div>
 
-      {/* Main Tabs Segmented Control with Horizontal Scroll Support for Mobile & Tablet */}
+      {/* Main Tabs Segmented Control:
+          - Profilo: Always visible
+          - Permessi & Risorse: Always visible
+          - Avanzate / Debug: ONLY visible to users with ADMIN role or in explicit debug state
+      */}
       <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-xl border border-slate-200 overflow-x-auto max-w-full">
         <button
           type="button"
@@ -292,38 +286,6 @@ export function UserDetailView({ onBack }: UserDetailViewProps) {
           <span>{canAccessDiagnostics ? 'Profilo & Identità OAuth' : 'Profilo Personale'}</span>
         </button>
 
-        {/* Tab Sicurezza: ONLY visible in Debug Mode */}
-        {isDebugMode && (
-          <button
-            type="button"
-            onClick={() => setActiveTab('session')}
-            className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 text-xs font-semibold rounded-lg transition-all whitespace-nowrap shrink-0 cursor-pointer ${
-              activeTab === 'session'
-                ? 'bg-white text-slate-900 shadow-xs'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            <Clock className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
-            <span>Sicurezza & Sessione [Debug]</span>
-          </button>
-        )}
-
-        {/* Tab Contratti: ONLY visible in Debug Mode */}
-        {isDebugMode && (
-          <button
-            type="button"
-            onClick={() => setActiveTab('contracts')}
-            className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 text-xs font-semibold rounded-lg transition-all whitespace-nowrap shrink-0 cursor-pointer ${
-              activeTab === 'contracts'
-                ? 'bg-white text-slate-900 shadow-xs'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            <Code2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-            <span>Contratti UI & API (Zod)</span>
-          </button>
-        )}
-
         <button
           type="button"
           onClick={() => setActiveTab('resources')}
@@ -336,6 +298,25 @@ export function UserDetailView({ onBack }: UserDetailViewProps) {
           <Layers className="w-3.5 h-3.5 text-amber-600 shrink-0" />
           <span>{canAccessDiagnostics ? 'Permessi & Risorse' : 'I Miei Permessi'}</span>
         </button>
+
+        {/* Conditional Advanced / Debug Tab (strictly visible only to ADMIN or in debug mode) */}
+        {showAdvancedDebug && (
+          <button
+            type="button"
+            onClick={() => setActiveTab('advanced')}
+            className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 text-xs font-semibold rounded-lg transition-all whitespace-nowrap shrink-0 cursor-pointer ${
+              activeTab === 'advanced'
+                ? 'bg-white text-slate-900 shadow-xs'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <Settings className="w-3.5 h-3.5 text-purple-600 shrink-0" />
+            <span>Avanzate & Debug</span>
+            <span className="text-[10px] px-1.5 py-0.2 rounded bg-purple-100 text-purple-800 font-mono font-bold">
+              {isAdmin ? 'ADMIN' : 'DEBUG'}
+            </span>
+          </button>
+        )}
       </div>
 
       {/* TAB 1: Profilo & Identità */}
@@ -471,169 +452,7 @@ export function UserDetailView({ onBack }: UserDetailViewProps) {
         </div>
       )}
 
-      {/* TAB 2: Sicurezza & Sessione (Debug Only) */}
-      {activeTab === 'session' && isDebugMode && (
-        <div className="bg-white rounded-2xl p-5 sm:p-6 border border-slate-200 shadow-xs space-y-6">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div>
-              <h4 className="text-sm font-bold text-slate-900">
-                {canAccessDiagnostics ? 'Stato di Sessione e Clocking Tracker' : 'Stato della Sessione Corrente'}
-              </h4>
-              <p className="text-xs text-slate-500">
-                {canAccessDiagnostics
-                  ? 'Telemetria tracciata dal package modulare @packages/clocking-audit'
-                  : 'Monitoraggio sicuro della durata e dello stato del tuo collegamento'}
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse" />
-                Sessione Attiva
-              </span>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div className="p-4 rounded-xl bg-slate-50 border border-slate-200">
-              <span className="text-xs text-slate-500 block mb-1">Durata Sessione</span>
-              <span className="text-xl sm:text-2xl font-bold text-slate-900 font-mono tabular-nums">
-                {Math.floor(sessionDuration / 60)}m {sessionDuration % 60}s
-              </span>
-            </div>
-
-            <div className="p-4 rounded-xl bg-slate-50 border border-slate-200">
-              <span className="text-xs text-slate-500 block mb-1">
-                {canAccessDiagnostics ? 'Battiti Heartbeat' : 'Stato Crittografico'}
-              </span>
-              <span className="text-xl sm:text-2xl font-bold text-slate-900 font-mono">
-                {canAccessDiagnostics ? heartbeatCount : 'TLS 1.3'}
-              </span>
-            </div>
-
-            <div className="p-4 rounded-xl bg-slate-50 border border-slate-200">
-              <span className="text-xs text-slate-500 block mb-1">
-                {canAccessDiagnostics ? 'Intervallo Ping' : 'Protezione Identità'}
-              </span>
-              <span className="text-xl sm:text-2xl font-bold text-slate-900 font-mono">
-                {canAccessDiagnostics ? '60s' : 'Google SSO'}
-              </span>
-            </div>
-          </div>
-
-          {canAccessDiagnostics ? (
-            <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 font-mono text-xs space-y-2">
-              <div className="text-slate-400 text-[11px] font-sans font-medium">Session Identifier:</div>
-              <div className="text-slate-800 break-all font-semibold">
-                sess_{user.uid.slice(0, 12)}_active
-              </div>
-              <div className="text-slate-400 text-[11px] font-sans font-medium mt-3">Adapter Tracciamento:</div>
-              <div className="text-slate-700 break-all">
-                FirestoreAuditAdapter (collection: <code className="text-blue-600">audit_logs</code>)
-              </div>
-            </div>
-          ) : (
-            <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-600 space-y-2">
-              <div className="flex items-center gap-2 font-semibold text-slate-900">
-                <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
-                <span>Connessione Protetta & Crittografata</span>
-              </div>
-              <p>
-                Tutte le richieste effettuate durante questa sessione sono autenticate tramite token federato Google e trasmesse su canale cifrato.
-              </p>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* TAB 3: Contratti UI & API (Zod v1) - Gated solo in Debug Mode */}
-      {activeTab === 'contracts' && isDebugMode && (
-        <div className="space-y-6">
-          <div className="bg-white rounded-2xl p-5 sm:p-6 border border-slate-200 shadow-xs space-y-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <h4 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                  <span>Specifiche Contratto UI (Zod v1)</span>
-                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
-                    VALIDATO RUNTIME
-                  </span>
-                </h4>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Ogni proprietà di input e di output di questa vista è vincolata dallo schema Zod tipizzato.
-                </p>
-              </div>
-
-              <div className="flex items-center gap-2 text-xs">
-                <span className="text-slate-500">Feature ID:</span>
-                <code className="px-2 py-0.5 bg-slate-100 text-slate-800 rounded font-mono font-semibold">
-                  {userContractSpec?.featureId || 'user-detail-view'}
-                </code>
-              </div>
-            </div>
-
-            {/* Validation State */}
-            {contractValidation.valid ? (
-              <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-200 text-xs text-emerald-800 flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                <span>
-                  I dati correnti dell'utente soddisfano al 100% lo schema <code className="font-mono">UserDetailResourceContractV1</code>.
-                </span>
-              </div>
-            ) : (
-              <div className="p-3 bg-rose-50 rounded-xl border border-rose-200 text-xs text-rose-800">
-                <p className="font-semibold mb-1">Mancata corrispondenza dello schema:</p>
-                <ul className="list-disc pl-4 space-y-0.5 font-mono text-[11px]">
-                  {contractValidation.errors?.map((err, i) => (
-                    <li key={i}>{err}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
-            {/* Required APIs List */}
-            <div>
-              <h5 className="text-xs font-bold text-slate-800 mb-2 font-sans uppercase tracking-wider">
-                API Backend Richieste dal Contratto UI
-              </h5>
-              <div className="space-y-2 font-mono text-xs">
-                {userContractSpec?.requiredApis.map((api, idx) => (
-                  <div
-                    key={idx}
-                    className="p-3 bg-slate-50 rounded-xl border border-slate-200 flex flex-wrap items-center justify-between gap-3"
-                  >
-                    <div className="flex items-center gap-2">
-                      <span
-                        className={`px-2 py-0.5 rounded text-[11px] font-bold ${
-                          api.method === 'GET'
-                            ? 'bg-blue-100 text-blue-800'
-                            : api.method === 'POST'
-                            ? 'bg-emerald-100 text-emerald-800'
-                            : 'bg-amber-100 text-amber-800'
-                        }`}
-                      >
-                        {api.method}
-                      </span>
-                      <span className="font-semibold text-slate-900">{api.path}</span>
-                    </div>
-                    <span className="text-xs text-slate-500 font-sans">{api.description}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Live Contract JSON Payload Preview */}
-            <div>
-              <h5 className="text-xs font-bold text-slate-800 mb-2 font-sans uppercase tracking-wider">
-                Payload JSON Validato (Snapshot V1)
-              </h5>
-              <pre className="p-4 rounded-xl bg-slate-900 text-emerald-400 font-mono text-[10px] sm:text-[11px] overflow-x-auto leading-relaxed max-w-full">
-                {JSON.stringify(contractValidation.data, null, 2)}
-              </pre>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* TAB 4: Risorse & Permessi RBAC */}
+      {/* TAB 2: Risorse & Permessi RBAC */}
       {activeTab === 'resources' && (
         <div className="bg-white rounded-2xl p-5 sm:p-6 border border-slate-200 shadow-xs space-y-6">
           <div className="flex flex-wrap items-center justify-between gap-4">
@@ -667,239 +486,375 @@ export function UserDetailView({ onBack }: UserDetailViewProps) {
             </div>
           </div>
 
-          {/* RBAC Role Switcher & Simulator: ONLY visible when isDebugMode is explicitly active */}
-          {isDebugMode && (
-            <div className="p-4 rounded-xl bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <UserCheck className="w-4 h-4 text-purple-700 shrink-0" />
-                  <span className="text-xs font-bold text-purple-900">
-                    Simulatore di Ruoli RBAC [Debug Mode]
-                  </span>
-                </div>
-                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-purple-200 text-purple-800 font-bold">
-                  Debug Tool
-                </span>
-              </div>
-              <p className="text-xs text-purple-700/80">
-                Cambia dinamicamente il ruolo per verificare come variano i permessi, l'accesso agli strumenti diagnostici e la visibilità dei contratti Zod.
-              </p>
-
-              <div className="flex flex-wrap items-center gap-2 pt-1">
-                {ALL_ROLES.map((role) => (
-                  <button
-                    key={role}
-                    type="button"
-                    onClick={() => store.setUserRole(role)}
-                    className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all border cursor-pointer ${
-                      userRole === role
-                        ? 'bg-purple-700 text-white border-purple-800 shadow-xs'
-                        : 'bg-white text-purple-900 border-purple-200 hover:bg-purple-100/60'
-                    }`}
-                  >
-                    {role.toUpperCase()}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
           {/* Meaningful Domain-Categorized Permissions Matrix */}
-          {canAccessDiagnostics ? (
-            <div className="space-y-6">
-              <div>
-                <h5 className="text-xs font-bold text-slate-800 mb-1 font-sans uppercase tracking-wider">
-                  Matrice Permessi per Gruppi Funzionali — <span className="text-blue-600">[{userRole.toUpperCase()}]</span>
-                </h5>
-                <p className="text-xs text-slate-500 mb-4">
-                  I permessi sono suddivisi per aree di responsabilità per facilitare il controllo accessi e il principio del minimo privilegio.
-                </p>
-              </div>
+          <div className="space-y-5">
+            {PERMISSION_GROUPS.map((group) => {
+              const groupPerms = ALL_PERMISSIONS.filter((p) => p.category === group.category);
+              const grantedCount = groupPerms.filter((p) =>
+                hasUserPermission(user, p.id, isDebugMode)
+              ).length;
+              const GroupIcon = group.icon;
 
-              {/* Categorized Permission Groups */}
-              <div className="space-y-5">
-                {PERMISSION_GROUPS.map((group) => {
-                  const groupPerms = ALL_PERMISSIONS.filter((p) => p.category === group.category);
-                  const grantedCount = groupPerms.filter((p) =>
-                    hasUserPermission(user, p.id, isDebugMode)
-                  ).length;
-                  const GroupIcon = group.icon;
-
-                  return (
-                    <div
-                      key={group.category}
-                      className="p-4 sm:p-5 rounded-2xl border border-slate-200 bg-slate-50/50 space-y-3.5 shadow-2xs"
-                    >
-                      {/* Group Header */}
-                      <div className="flex flex-wrap items-center justify-between gap-2 pb-2.5 border-b border-slate-200">
-                        <div className="flex items-center gap-2.5 min-w-0">
-                          <div className={`p-1.5 rounded-lg border ${group.badgeClass}`}>
-                            <GroupIcon className="w-4 h-4 shrink-0" />
-                          </div>
-                          <div className="min-w-0">
-                            <h6 className="text-xs sm:text-sm font-bold text-slate-900 truncate">
-                              {group.title}
-                            </h6>
-                            <span className="text-[11px] text-slate-500 block truncate">
-                              {group.description}
-                            </span>
-                          </div>
-                        </div>
-
-                        <span
-                          className={`text-[10px] font-mono px-2 py-0.5 rounded-full font-bold border ${
-                            grantedCount > 0
-                              ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
-                              : 'bg-slate-100 text-slate-600 border-slate-200'
-                          }`}
-                        >
-                          {grantedCount}/{groupPerms.length} Concessi
+              return (
+                <div
+                  key={group.category}
+                  className="p-4 sm:p-5 rounded-2xl border border-slate-200 bg-slate-50/50 space-y-3.5 shadow-2xs"
+                >
+                  {/* Group Header */}
+                  <div className="flex flex-wrap items-center justify-between gap-2 pb-2.5 border-b border-slate-200">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className={`p-1.5 rounded-lg border ${group.badgeClass}`}>
+                        <GroupIcon className="w-4 h-4 shrink-0" />
+                      </div>
+                      <div className="min-w-0">
+                        <h5 className="text-xs sm:text-sm font-bold text-slate-900 truncate">
+                          {group.title}
+                        </h5>
+                        <span className="text-[11px] text-slate-500 block truncate">
+                          {group.description}
                         </span>
                       </div>
+                    </div>
 
-                      {/* Group Permissions Cards */}
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        {groupPerms.map((perm) => {
-                          const isGranted = hasUserPermission(user, perm.id, isDebugMode);
-                          return (
-                            <div
-                              key={perm.id}
-                              className={`p-3 rounded-xl border transition-all ${
+                    <span
+                      className={`text-[10px] font-mono px-2 py-0.5 rounded-full font-bold border ${
+                        grantedCount > 0
+                          ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                          : 'bg-slate-100 text-slate-600 border-slate-200'
+                      }`}
+                    >
+                      {grantedCount}/{groupPerms.length} Concessi
+                    </span>
+                  </div>
+
+                  {/* Group Permissions Cards */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {groupPerms.map((perm) => {
+                      const isGranted = hasUserPermission(user, perm.id, isDebugMode);
+                      return (
+                        <div
+                          key={perm.id}
+                          className={`p-3 rounded-xl border transition-all ${
+                            isGranted
+                              ? 'bg-white border-emerald-200 shadow-2xs'
+                              : 'bg-white/60 border-slate-200 opacity-60'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between gap-2 mb-1">
+                            <div className="flex items-center gap-2 min-w-0">
+                              {isGranted ? (
+                                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                              ) : (
+                                <XCircle className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                              )}
+                              <span className="font-semibold text-xs font-sans text-slate-900 truncate">
+                                {perm.label}
+                              </span>
+                            </div>
+                            <span
+                              className={`text-[10px] font-mono px-2 py-0.5 rounded font-bold shrink-0 ${
                                 isGranted
-                                  ? 'bg-white border-emerald-200 shadow-2xs'
-                                  : 'bg-white/60 border-slate-200 opacity-60'
+                                  ? 'bg-emerald-100 text-emerald-800'
+                                  : 'bg-slate-200 text-slate-600'
                               }`}
                             >
-                              <div className="flex items-center justify-between gap-2 mb-1">
-                                <div className="flex items-center gap-2 min-w-0">
-                                  {isGranted ? (
-                                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                                  ) : (
-                                    <XCircle className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                                  )}
-                                  <span className="font-semibold text-xs font-sans text-slate-900 truncate">
-                                    {perm.label}
-                                  </span>
-                                </div>
-                                <span
-                                  className={`text-[10px] font-mono px-2 py-0.5 rounded font-bold shrink-0 ${
-                                    isGranted
-                                      ? 'bg-emerald-100 text-emerald-800'
-                                      : 'bg-slate-200 text-slate-600'
-                                  }`}
-                                >
-                                  {isGranted ? 'ATTIVO' : 'NEGATO'}
-                                </span>
-                              </div>
-                              <p className="text-[11px] text-slate-500 font-sans pl-5.5 leading-snug">
-                                {perm.description}
-                              </p>
-                              <code className="text-[10px] font-mono text-slate-400 pl-5.5 block mt-1">
-                                {perm.id}
-                              </code>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* Zero-Trust Architecture Invariants */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
-                <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-3">
-                  <div className="flex items-center gap-2 text-slate-900 font-bold text-sm">
-                    <Lock className="w-4 h-4 text-blue-600 shrink-0" />
-                    <span>Politiche di Sicurezza Firestore</span>
+                              {isGranted ? 'ATTIVO' : 'NEGATO'}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-slate-500 font-sans pl-5.5 leading-snug">
+                            {perm.description}
+                          </p>
+                          <code className="text-[10px] font-mono text-slate-400 pl-5.5 block mt-1">
+                            {perm.id}
+                          </code>
+                        </div>
+                      );
+                    })}
                   </div>
-                  <ul className="space-y-1.5 text-xs text-slate-700">
-                    <li className="flex items-center gap-2">
-                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                      <span>
-                        Lettura/Scrittura profilo isolata su <code className="font-mono text-blue-700 text-[11px]">/users/{user.uid}</code>
-                      </span>
-                    </li>
-                    <li className="flex items-center gap-2">
-                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                      <span>
-                        Scrittura append-only registri audit su <code className="font-mono text-blue-700 text-[11px]">/audit_logs</code>
-                      </span>
-                    </li>
-                    <li className="flex items-center gap-2">
-                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                      <span>Nessun bypass consentito senza token federato verificato</span>
-                    </li>
-                  </ul>
                 </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
-                <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-3">
-                  <div className="flex items-center gap-2 text-slate-900 font-bold text-sm">
-                    <Shield className="w-4 h-4 text-emerald-600 shrink-0" />
-                    <span>Zero-Trust Invariants</span>
-                  </div>
-                  <ul className="space-y-1.5 text-xs text-slate-700">
-                    <li className="flex items-center gap-2">
-                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                      <span>Immutabilità di UID e timestamp di registrazione</span>
-                    </li>
-                    <li className="flex items-center gap-2">
-                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                      <span>Divieto assoluto di query lista globale (anti-scraping)</span>
-                    </li>
-                    <li className="flex items-center gap-2">
-                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                      <span className="truncate">Bootstrapped Admin per <code className="font-mono text-purple-700 text-[11px]">awesome.cit.dev@gmail.com</code></span>
-                    </li>
-                  </ul>
-                </div>
-              </div>
+      {/* TAB 3: Advanced / Debug View (Consolidated Security & Contracts debugging tools) */}
+      {activeTab === 'advanced' && showAdvancedDebug && (
+        <div className="space-y-6">
+          {/* Sub-navigation for Advanced/Debug view */}
+          <div className="flex flex-wrap items-center justify-between gap-3 p-3 bg-purple-50/60 rounded-2xl border border-purple-200">
+            <div className="flex items-center gap-2">
+              <Settings className="w-4 h-4 text-purple-700" />
+              <span className="text-xs font-bold text-purple-950">
+                Pannello Avanzate & Debugging
+              </span>
+              <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-purple-200 text-purple-900">
+                {isAdmin ? 'ADMIN ACCESS' : 'DEBUG STATE'}
+              </span>
             </div>
-          ) : (
-            <div className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
-                  <div className="flex items-center gap-2 text-slate-900 font-semibold text-sm">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                    <span>Accesso Profilo Personale</span>
-                  </div>
-                  <p className="text-xs text-slate-600">
-                    Puoi visualizzare i tuoi dati di accesso e aggiornare le tue preferenze in qualsiasi momento.
+
+            {/* Sub-tab Switcher: Sicurezza vs Contratti */}
+            <div className="flex items-center p-1 bg-white rounded-xl border border-purple-200 text-xs font-semibold shadow-2xs">
+              <button
+                type="button"
+                onClick={() => setAdvancedSubTab('security')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                  advancedSubTab === 'security'
+                    ? 'bg-purple-700 text-white shadow-xs'
+                    : 'text-purple-900 hover:bg-purple-50'
+                }`}
+              >
+                <Clock className="w-3.5 h-3.5 shrink-0" />
+                <span>Sicurezza & Sessione</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setAdvancedSubTab('contracts')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                  advancedSubTab === 'contracts'
+                    ? 'bg-purple-700 text-white shadow-xs'
+                    : 'text-purple-900 hover:bg-purple-50'
+                }`}
+              >
+                <Code2 className="w-3.5 h-3.5 shrink-0" />
+                <span>Contratti UI & API (Zod)</span>
+              </button>
+            </div>
+          </div>
+
+          {/* RBAC Role Switcher & Simulator (Visible in Advanced/Debug view) */}
+          <div className="p-4 rounded-2xl bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 space-y-3 shadow-2xs">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <UserCheck className="w-4 h-4 text-purple-700 shrink-0" />
+                <span className="text-xs font-bold text-purple-900">
+                  Simulatore di Ruoli RBAC [Debug Mode]
+                </span>
+              </div>
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-purple-200 text-purple-800 font-bold">
+                Role Testing
+              </span>
+            </div>
+            <p className="text-xs text-purple-700/80">
+              Cambia dinamicamente il ruolo per verificare come variano i permessi, l'accesso agli strumenti diagnostici e la visibilità dei contratti Zod.
+            </p>
+
+            <div className="flex flex-wrap items-center gap-2 pt-1">
+              {ALL_ROLES.map((role) => (
+                <button
+                  key={role}
+                  type="button"
+                  onClick={() => store.setUserRole(role)}
+                  className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all border cursor-pointer ${
+                    userRole === role
+                      ? 'bg-purple-700 text-white border-purple-800 shadow-xs'
+                      : 'bg-white text-purple-900 border-purple-200 hover:bg-purple-100/60'
+                  }`}
+                >
+                  {role.toUpperCase()}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* SubTab 1: Sicurezza & Sessione Debugging */}
+          {advancedSubTab === 'security' && (
+            <div className="bg-white rounded-2xl p-5 sm:p-6 border border-slate-200 shadow-xs space-y-6">
+              <div className="flex flex-wrap items-center justify-between gap-4 pb-3 border-b border-slate-100">
+                <div>
+                  <h4 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                    <Clock className="w-4 h-4 text-indigo-600 shrink-0" />
+                    <span>Stato di Sessione e Clocking Tracker (Sicurezza & Sessione)</span>
+                  </h4>
+                  <p className="text-xs text-slate-500">
+                    Telemetria tracciata dal package modulare @packages/clocking-audit
                   </p>
                 </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleManualHeartbeat}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-300 rounded-lg transition-colors shadow-2xs cursor-pointer"
+                    title="Invia battito di sessione al logger"
+                  >
+                    <Activity className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                    <span>Heartbeat Test ({heartbeatCount})</span>
+                  </button>
+                </div>
+              </div>
 
-                <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
-                  <div className="flex items-center gap-2 text-slate-900 font-semibold text-sm">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                    <span>Sessione Protetta</span>
-                  </div>
-                  <p className="text-xs text-slate-600">
-                    Il tuo collegamento è monitorato per prevenire accessi non autorizzati e garantire la massima riservatezza.
-                  </p>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="p-4 rounded-xl bg-slate-50 border border-slate-200">
+                  <span className="text-xs text-slate-500 block mb-1">Durata Sessione</span>
+                  <span className="text-xl sm:text-2xl font-bold text-slate-900 font-mono tabular-nums">
+                    {Math.floor(sessionDuration / 60)}m {sessionDuration % 60}s
+                  </span>
                 </div>
 
-                <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
-                  <div className="flex items-center gap-2 text-slate-900 font-semibold text-sm">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                    <span>Privacy dei Dati</span>
-                  </div>
-                  <p className="text-xs text-slate-600">
-                    I tuoi dati sono isolati; nessun altro utente del portale ha accesso alle tue informazioni personali.
-                  </p>
+                <div className="p-4 rounded-xl bg-slate-50 border border-slate-200">
+                  <span className="text-xs text-slate-500 block mb-1">Battiti Heartbeat</span>
+                  <span className="text-xl sm:text-2xl font-bold text-slate-900 font-mono">
+                    {heartbeatCount}
+                  </span>
                 </div>
 
-                <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
-                  <div className="flex items-center gap-2 text-slate-900 font-semibold text-sm">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                    <span>Autenticazione Google</span>
-                  </div>
-                  <p className="text-xs text-slate-600">
-                    Accesso rapido e sicuro con verifica in due passaggi gestita direttamente dal tuo account Google.
-                  </p>
+                <div className="p-4 rounded-xl bg-slate-50 border border-slate-200">
+                  <span className="text-xs text-slate-500 block mb-1">Intervallo Ping</span>
+                  <span className="text-xl sm:text-2xl font-bold text-slate-900 font-mono">
+                    60s
+                  </span>
+                </div>
+              </div>
+
+              <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 font-mono text-xs space-y-2">
+                <div className="text-slate-400 text-[11px] font-sans font-medium">Session Identifier:</div>
+                <div className="text-slate-800 break-all font-semibold">
+                  sess_{user.uid.slice(0, 12)}_active
+                </div>
+                <div className="text-slate-400 text-[11px] font-sans font-medium mt-3">Adapter Tracciamento:</div>
+                <div className="text-slate-700 break-all">
+                  FirestoreAuditAdapter (collection: <code className="text-blue-600">audit_logs</code>)
                 </div>
               </div>
             </div>
           )}
+
+          {/* SubTab 2: Contratti Zod (v1) Debugging */}
+          {advancedSubTab === 'contracts' && (
+            <div className="bg-white rounded-2xl p-5 sm:p-6 border border-slate-200 shadow-xs space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-100">
+                <div>
+                  <h4 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                    <Code2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span>Contratti UI & API (Zod)</span>
+                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                      VALIDATO RUNTIME
+                    </span>
+                  </h4>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Ogni proprietà di input e di output di questa vista è vincolata dallo schema Zod tipizzato.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="text-slate-500">Feature ID:</span>
+                  <code className="px-2 py-0.5 bg-slate-100 text-slate-800 rounded font-mono font-semibold">
+                    {userContractSpec?.featureId || 'user-detail-view'}
+                  </code>
+                </div>
+              </div>
+
+              {/* Validation State */}
+              {contractValidation.valid ? (
+                <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-200 text-xs text-emerald-800 flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>
+                    I dati correnti dell'utente soddisfano al 100% lo schema <code className="font-mono">UserDetailResourceContractV1</code>.
+                  </span>
+                </div>
+              ) : (
+                <div className="p-3 bg-rose-50 rounded-xl border border-rose-200 text-xs text-rose-800">
+                  <p className="font-semibold mb-1">Mancata corrispondenza dello schema:</p>
+                  <ul className="list-disc pl-4 space-y-0.5 font-mono text-[11px]">
+                    {contractValidation.errors?.map((err, i) => (
+                      <li key={i}>{err}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Required APIs List */}
+              <div>
+                <h5 className="text-xs font-bold text-slate-800 mb-2 font-sans uppercase tracking-wider">
+                  API Backend Richieste dal Contratto UI
+                </h5>
+                <div className="space-y-2 font-mono text-xs">
+                  {userContractSpec?.requiredApis.map((api, idx) => (
+                    <div
+                      key={idx}
+                      className="p-3 bg-slate-50 rounded-xl border border-slate-200 flex flex-wrap items-center justify-between gap-3"
+                    >
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`px-2 py-0.5 rounded text-[11px] font-bold ${
+                            api.method === 'GET'
+                              ? 'bg-blue-100 text-blue-800'
+                              : api.method === 'POST'
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : 'bg-amber-100 text-amber-800'
+                          }`}
+                        >
+                          {api.method}
+                        </span>
+                        <span className="font-semibold text-slate-900">{api.path}</span>
+                      </div>
+                      <span className="text-xs text-slate-500 font-sans">{api.description}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Live Contract JSON Payload Preview */}
+              <div>
+                <h5 className="text-xs font-bold text-slate-800 mb-2 font-sans uppercase tracking-wider">
+                  Payload JSON Validato (Snapshot V1)
+                </h5>
+                <pre className="p-4 rounded-xl bg-slate-900 text-emerald-400 font-mono text-[10px] sm:text-[11px] overflow-x-auto leading-relaxed max-w-full">
+                  {JSON.stringify(contractValidation.data, null, 2)}
+                </pre>
+              </div>
+            </div>
+          )}
+
+          {/* Zero-Trust Architecture Invariants */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+            <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-3">
+              <div className="flex items-center gap-2 text-slate-900 font-bold text-sm">
+                <Lock className="w-4 h-4 text-blue-600 shrink-0" />
+                <span>Politiche di Sicurezza Firestore</span>
+              </div>
+              <ul className="space-y-1.5 text-xs text-slate-700">
+                <li className="flex items-center gap-2">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                  <span>
+                    Lettura/Scrittura profilo isolata su <code className="font-mono text-blue-700 text-[11px]">/users/{user.uid}</code>
+                  </span>
+                </li>
+                <li className="flex items-center gap-2">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                  <span>
+                    Scrittura append-only registri audit su <code className="font-mono text-blue-700 text-[11px]">/audit_logs</code>
+                  </span>
+                </li>
+                <li className="flex items-center gap-2">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                  <span>Nessun bypass consentito senza token federato verificato</span>
+                </li>
+              </ul>
+            </div>
+
+            <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-3">
+              <div className="flex items-center gap-2 text-slate-900 font-bold text-sm">
+                <Shield className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>Zero-Trust Invariants</span>
+              </div>
+              <ul className="space-y-1.5 text-xs text-slate-700">
+                <li className="flex items-center gap-2">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                  <span>Immutabilità di UID e timestamp di registrazione</span>
+                </li>
+                <li className="flex items-center gap-2">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                  <span>Divieto assoluto di query lista globale (anti-scraping)</span>
+                </li>
+                <li className="flex items-center gap-2">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                  <span className="truncate">Bootstrapped Admin per <code className="font-mono text-purple-700 text-[11px]">awesome.cit.dev@gmail.com</code></span>
+                </li>
+              </ul>
+            </div>
+          </div>
         </div>
       )}
     </div>

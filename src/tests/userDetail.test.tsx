@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { render, screen, cleanup } from '@testing-library/react';
+import { render, screen, cleanup, fireEvent } from '@testing-library/react';
 import React from 'react';
 import { UserDetailView } from '../components/UserDetailView.tsx';
 import { LanguageSelector } from '../components/LanguageSelector.tsx';
@@ -28,14 +28,15 @@ describe('UserDetailView & LanguageSelector Components', () => {
     expect(screen.getByText('Profilo Personale')).toBeDefined();
     expect(screen.getByText('I Miei Permessi')).toBeDefined();
 
-    // Debug-only tools (Contratti, Sicurezza, Heartbeat, Simulatore) should NOT be rendered when not in debug
+    // Advanced/Debug view and debug tools should NOT be rendered for standard non-debug user
+    expect(screen.queryByText(/Avanzate & Debug/i)).toBeNull();
     expect(screen.queryByText('Contratti UI & API (Zod)')).toBeNull();
     expect(screen.queryByText(/Sicurezza & Sessione/i)).toBeNull();
     expect(screen.queryByText(/Heartbeat Test/i)).toBeNull();
     expect(screen.queryByText(/Simulatore di Ruoli RBAC/i)).toBeNull();
   });
 
-  it('renders diagnostic, security session and contract inspection tools in debug mode', () => {
+  it('renders conditional Advanced/Debug view for admin or in debug mode', () => {
     cleanup();
     store.setUserRole('admin');
     store.setDebugMode(true);
@@ -43,9 +44,23 @@ describe('UserDetailView & LanguageSelector Components', () => {
     render(<UserDetailView />);
     expect(screen.getByText('Dettaglio Risorsa Utente')).toBeDefined();
     expect(screen.getByText('Profilo & Identità OAuth')).toBeDefined();
-    expect(screen.getByText(/Sicurezza & Sessione/i)).toBeDefined();
-    expect(screen.getByText('Contratti UI & API (Zod)')).toBeDefined();
+
+    // Advanced/Debug tab is visible
+    const advancedTab = screen.getByText(/Avanzate & Debug/i);
+    expect(advancedTab).toBeDefined();
+
+    // Click into the Advanced / Debug view
+    fireEvent.click(advancedTab);
+
+    // Now security telemetry, heartbeat, and contracts inspection tools are accessible
+    expect(screen.getAllByText(/Sicurezza & Sessione/i).length).toBeGreaterThan(0);
     expect(screen.getByText(/Heartbeat Test/i)).toBeDefined();
+
+    // Switch to contracts sub-tab
+    const contractsSubTab = screen.getByText('Contratti UI & API (Zod)');
+    expect(contractsSubTab).toBeDefined();
+    fireEvent.click(contractsSubTab);
+    expect(screen.getByText(/Payload JSON Validato/i)).toBeDefined();
   });
 
   it('renders LanguageSelector with accessible select dropdown', () => {
