@@ -89,6 +89,19 @@ export const it = {
     logsCleared: 'Cronologia log ripulita.',
   },
 
+  // Session Inactivity Timeout
+  sessionTimeout: {
+    warningTitle: 'Avviso di Inattività',
+    warningSubtitle: 'La tua sessione sta per scadere per inattività.',
+    warningDescription: 'Per proteggere il tuo account, la disconnessione automatica avverrà tra:',
+    countdownSeconds: '{seconds} secondi',
+    stayLoggedIn: 'Rimani Connesso',
+    signOutNow: 'Disconnetti Adesso',
+    sessionExtended: 'Sessione prolungata con successo.',
+    expiredTitle: 'Sessione Scaduta',
+    expiredMessage: 'La sessione è scaduta per inattività (30 minuti). Effettua nuovamente l\'accesso.',
+  },
+
   // Language selector
   lang: {
     italian: 'Italiano',

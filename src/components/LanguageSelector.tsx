@@ -1,52 +1,63 @@
+import { Globe, ChevronDown } from 'lucide-react';
 import { store, useAuthStore } from '../lib/store.ts';
 import { Language } from '../lib/types.ts';
+
+interface LanguageOption {
+  code: Language;
+  label: string;
+  nativeName: string;
+  flag: string;
+}
+
+export const SUPPORTED_LANGUAGES: LanguageOption[] = [
+  { code: 'it', label: 'Italiano', nativeName: 'Italiano', flag: '🇮🇹' },
+  { code: 'en', label: 'English', nativeName: 'English (US)', flag: '🇬🇧' },
+];
 
 export function LanguageSelector({ compact = false }: { compact?: boolean }) {
   const { currentLang } = useAuthStore();
 
-  const handleSelect = (lang: Language) => {
-    if (lang !== currentLang) {
-      store.setLanguage(lang);
+  const currentOption =
+    SUPPORTED_LANGUAGES.find((l) => l.code === currentLang) || SUPPORTED_LANGUAGES[0];
+
+  const handleChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const newLang = e.target.value as Language;
+    if (newLang !== currentLang) {
+      store.setLanguage(newLang);
     }
   };
 
   return (
-    <div
-      role="group"
-      aria-label="Language selector"
-      className="inline-flex items-center p-1 bg-slate-100 rounded-lg border border-slate-200"
-    >
-      <button
-        type="button"
-        onClick={() => handleSelect('it')}
-        className={`px-2.5 py-1 text-xs font-semibold rounded-md transition-all ${
-          currentLang === 'it'
-            ? 'bg-white text-slate-900 shadow-sm'
-            : 'text-slate-600 hover:text-slate-900'
-        }`}
-        aria-pressed={currentLang === 'it'}
-      >
-        <span className="flex items-center gap-1.5">
-          <span className="text-xs">🇮🇹</span>
-          {!compact && <span>IT</span>}
+    <div className="relative inline-flex items-center">
+      <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200/80 rounded-xl border border-slate-200 transition-colors cursor-pointer text-slate-800 text-xs font-semibold">
+        <span className="text-sm select-none" aria-hidden="true">
+          {currentOption.flag}
         </span>
-      </button>
+        {!compact ? (
+          <span className="font-medium text-slate-700">
+            {currentOption.label}
+          </span>
+        ) : (
+          <span className="font-semibold text-slate-700 uppercase text-[11px]">
+            {currentOption.code}
+          </span>
+        )}
+        <ChevronDown className="w-3.5 h-3.5 text-slate-400 shrink-0 pointer-events-none" />
+      </div>
 
-      <button
-        type="button"
-        onClick={() => handleSelect('en')}
-        className={`px-2.5 py-1 text-xs font-semibold rounded-md transition-all ${
-          currentLang === 'en'
-            ? 'bg-white text-slate-900 shadow-sm'
-            : 'text-slate-600 hover:text-slate-900'
-        }`}
-        aria-pressed={currentLang === 'en'}
+      {/* Accessible native select overlay for seamless multi-device support */}
+      <select
+        value={currentLang}
+        onChange={handleChange}
+        aria-label="Seleziona la lingua dell'interfaccia"
+        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer text-xs"
       >
-        <span className="flex items-center gap-1.5">
-          <span className="text-xs">🇬🇧</span>
-          {!compact && <span>EN</span>}
-        </span>
-      </button>
+        {SUPPORTED_LANGUAGES.map((lang) => (
+          <option key={lang.code} value={lang.code} className="text-slate-900 bg-white">
+            {lang.flag} {lang.nativeName} ({lang.code.toUpperCase()})
+          </option>
+        ))}
+      </select>
     </div>
   );
 }

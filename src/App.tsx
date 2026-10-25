@@ -9,10 +9,13 @@ import { ToastContainer } from './components/ToastContainer.tsx';
 import { DiagnosticDrawer } from './components/DiagnosticDrawer.tsx';
 import { AboutModal } from './components/AboutModal.tsx';
 import { PolicyModal } from './components/PolicyModal.tsx';
+import { SessionTimeoutModal } from './components/SessionTimeoutModal.tsx';
+import { useSessionTimeout } from './hooks/useSessionTimeout.ts';
 import { auditTranslations } from './lib/i18n/index.ts';
 
 export default function App() {
   const { user, initialized } = useAuthStore();
+  const sessionTimeout = useSessionTimeout();
 
   useEffect(() => {
     // 1. Boot connection test per skill mandate
@@ -83,6 +86,17 @@ export default function App() {
 
         {/* Dedicated Terms of Service & Privacy Policy Modal */}
         <PolicyModal />
+
+        {/* Automatic Inactivity Session Timeout Warning Modal (30 min / 2 min warning) */}
+        {user && (
+          <SessionTimeoutModal
+            isOpen={sessionTimeout.isWarningOpen}
+            secondsRemaining={sessionTimeout.secondsRemaining}
+            totalWarningSeconds={sessionTimeout.totalWarningSeconds}
+            onExtend={sessionTimeout.extendSession}
+            onSignOut={sessionTimeout.signOutImmediately}
+          />
+        )}
       </div>
     </ErrorBoundary>
   );

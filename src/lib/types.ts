@@ -8,6 +8,10 @@ export type AuthMode = 'signin' | 'signup';
 
 export type LogLevel = 'DEBUG' | 'INFO' | 'WARN' | 'ERROR';
 
+import type { UserRoleV1, UserPermissionV1 } from '../packages/contracts/v1/userContract.ts';
+
+export type { UserRoleV1, UserPermissionV1 };
+
 export interface UserProfile {
   uid: string;
   email: string;
@@ -16,6 +20,8 @@ export interface UserProfile {
   providerId: string;
   registeredAt: string;
   lastLoginAt: string;
+  role?: UserRoleV1;
+  permissions?: UserPermissionV1[];
 }
 
 export interface StructuredLog {

@@ -18,6 +18,7 @@ import firebaseConfig from '../../firebase-applet-config.json';
 import { logger } from './logger.ts';
 import { UserProfile } from './types.ts';
 import { FirestoreAuditAdapter, SessionAuditTracker } from '../packages/clocking-audit/index.ts';
+import { getDefaultRoleForEmail, getPermissionsForRole } from './rbac.ts';
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
@@ -109,6 +110,9 @@ export async function testConnection(): Promise<boolean> {
 // Sync user profile to Firestore
 export async function syncUserProfile(user: FirebaseUser, isSignUp: boolean): Promise<UserProfile> {
   const nowIso = new Date().toISOString();
+  const role = getDefaultRoleForEmail(user.email);
+  const permissions = getPermissionsForRole(role);
+
   const userProfile: UserProfile = {
     uid: user.uid,
     email: user.email || '',
@@ -117,9 +121,10 @@ export async function syncUserProfile(user: FirebaseUser, isSignUp: boolean): Pr
     providerId: user.providerData?.[0]?.providerId || 'google.com',
     registeredAt: nowIso,
     lastLoginAt: nowIso,
+    role,
+    permissions,
   };
 
-  const userDocPath = `users/${user.uid}`;
   try {
     await setDoc(
       doc(db, 'users', user.uid),
@@ -131,12 +136,14 @@ export async function syncUserProfile(user: FirebaseUser, isSignUp: boolean): Pr
         providerId: userProfile.providerId,
         registeredAt: userProfile.registeredAt,
         lastLoginAt: userProfile.lastLoginAt,
+        role: userProfile.role,
       },
       { merge: true }
     );
 
     logger.info('AuthService', `User profile successfully synced in Firestore: ${user.uid}`, {
       email: userProfile.email,
+      role: userProfile.role,
       isSignUp,
     });
   } catch (error) {

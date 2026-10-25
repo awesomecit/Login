@@ -15,33 +15,32 @@ export function GoogleAuthCard() {
     store.clearLastError();
     try {
       await store.loginWithGoogle(isSignUp);
-    } catch (err: any) {
-      setInternalError(err.message || 'Errore durante l\'autenticazione Google');
+    } catch {
+      // L'errore è già formattato e mascherato/dettagliato in store.lastError
     }
   };
 
-  const displayedError = lastError || internalError;
+  const displayedError = lastError;
 
   const [logoClicks, setLogoClicks] = useState(0);
 
   const handleLogoClick = () => {
-    setLogoClicks((prev) => {
-      const next = prev + 1;
-      if (next >= 3) {
-        const newDebug = !isDebugMode;
-        store.setDebugMode(newDebug);
-        store.addToast({
-          type: newDebug ? 'info' : 'warning',
-          title: 'Modalità Debug',
-          message: newDebug
-            ? 'Modalità Debug attivata (pulsanti Info e Log visibili)'
-            : 'Modalità Debug disattivata',
-        });
-        return 0;
-      }
-      setTimeout(() => setLogoClicks(0), 1000);
-      return next;
-    });
+    const next = logoClicks + 1;
+    if (next >= 3) {
+      setLogoClicks(0);
+      const newDebug = !isDebugMode;
+      store.setDebugMode(newDebug);
+      store.addToast({
+        type: newDebug ? 'info' : 'warning',
+        title: 'Modalità Debug',
+        message: newDebug
+          ? 'Modalità Debug attivata (pulsanti Info e Log visibili)'
+          : 'Modalità Debug disattivata',
+      });
+    } else {
+      setLogoClicks(next);
+      setTimeout(() => setLogoClicks(0), 1200);
+    }
   };
 
   return (
@@ -120,13 +119,13 @@ export function GoogleAuthCard() {
         </div>
 
         {/* Title & Subtitle */}
-        <div className="mb-7">
+        <div className="mb-7 text-center">
           <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900 mb-2">
             {isSignUp
               ? getTranslation(currentLang, 'auth.createAccount')
               : getTranslation(currentLang, 'auth.welcomeBack')}
           </h2>
-          <p className="text-sm text-slate-500 leading-relaxed">
+          <p className="text-sm text-slate-500 leading-relaxed max-w-sm mx-auto">
             {isSignUp
               ? getTranslation(currentLang, 'auth.signUpSubtitle')
               : getTranslation(currentLang, 'auth.signInSubtitle')}

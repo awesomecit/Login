@@ -91,6 +91,19 @@ export const en: TranslationSchema = {
     logsCleared: 'Log history cleared.',
   },
 
+  // Session Inactivity Timeout
+  sessionTimeout: {
+    warningTitle: 'Inactivity Warning',
+    warningSubtitle: 'Your session is about to expire due to inactivity.',
+    warningDescription: 'To protect your account, you will be automatically logged out in:',
+    countdownSeconds: '{seconds} seconds',
+    stayLoggedIn: 'Stay Logged In',
+    signOutNow: 'Sign Out Now',
+    sessionExtended: 'Session extended successfully.',
+    expiredTitle: 'Session Expired',
+    expiredMessage: 'Your session has expired due to inactivity (30 minutes). Please sign in again.',
+  },
+
   // Language selector
   lang: {
     italian: 'Italiano',

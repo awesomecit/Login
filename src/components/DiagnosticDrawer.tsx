@@ -8,6 +8,7 @@ import {
   ChevronRight,
   Terminal,
   Filter,
+  Clock,
 } from 'lucide-react';
 import { logger } from '../lib/logger.ts';
 import { store, useAuthStore } from '../lib/store.ts';
@@ -106,6 +107,19 @@ export function DiagnosticDrawer() {
             >
               <Download className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">{getTranslation(currentLang, 'drawer.exportJson')}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                window.dispatchEvent(new CustomEvent('session-timeout:simulate', { detail: { seconds: 120 } }));
+                store.setDrawerOpen(false);
+              }}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-amber-800 bg-amber-50 hover:bg-amber-100 rounded-lg border border-amber-200 transition-colors shadow-xs"
+              title="Testa il modale di avviso timeout sessione (preavviso 2 minuti)"
+            >
+              <Clock className="w-3.5 h-3.5 text-amber-600" />
+              <span className="hidden sm:inline">Test Timeout (2m)</span>
             </button>
 
             <button

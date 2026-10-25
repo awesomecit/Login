@@ -1,9 +1,10 @@
 import { useSyncExternalStore } from 'react';
-import { AuthMode, Language, ToastMessage, UserProfile } from './types.ts';
+import { AuthMode, Language, ToastMessage, UserProfile, UserRoleV1, UserPermissionV1 } from './types.ts';
 import { auth, googleProvider, signInWithPopup, signOut, syncUserProfile } from './firebase.ts';
 import { logger } from './logger.ts';
 import { parseAuthError } from './errorHandler.ts';
 import { getTranslation } from './i18n/index.ts';
+import { getDefaultRoleForEmail, getPermissionsForRole, hasUserPermission, canAccessTestingTools } from './rbac.ts';
 
 export interface AppState {
   user: UserProfile | null;
@@ -68,7 +69,14 @@ function getInitialDebug(): boolean {
 function getInitialUser(): UserProfile | null {
   try {
     const cached = localStorage.getItem(STORAGE_USER_KEY);
-    return cached ? JSON.parse(cached) : null;
+    if (!cached) return null;
+    const parsed: UserProfile = JSON.parse(cached);
+    if (parsed) {
+      const role = parsed.role || getDefaultRoleForEmail(parsed.email);
+      parsed.role = role;
+      parsed.permissions = parsed.permissions || getPermissionsForRole(role);
+    }
+    return parsed;
   } catch {
     return null;
   }
@@ -182,16 +190,59 @@ class Store {
   };
 
   public setUser = (user: UserProfile | null) => {
+    let hydratedUser = user;
+    if (hydratedUser) {
+      const role = hydratedUser.role || getDefaultRoleForEmail(hydratedUser.email);
+      hydratedUser = {
+        ...hydratedUser,
+        role,
+        permissions: hydratedUser.permissions || getPermissionsForRole(role),
+      };
+    }
+
     try {
-      if (user) {
-        localStorage.setItem(STORAGE_USER_KEY, JSON.stringify(user));
+      if (hydratedUser) {
+        localStorage.setItem(STORAGE_USER_KEY, JSON.stringify(hydratedUser));
       } else {
         localStorage.removeItem(STORAGE_USER_KEY);
       }
     } catch {
       // ignore storage errors
     }
-    this.setState({ user });
+    this.setState({ user: hydratedUser });
+  };
+
+  public setUserRole = (newRole: UserRoleV1) => {
+    if (!this.state.user) return;
+    const updatedUser: UserProfile = {
+      ...this.state.user,
+      role: newRole,
+      permissions: getPermissionsForRole(newRole),
+    };
+    try {
+      localStorage.setItem(STORAGE_USER_KEY, JSON.stringify(updatedUser));
+    } catch {
+      // ignore
+    }
+    this.setState({ user: updatedUser });
+    logger.info('Store', `User role simulated to: ${newRole}`, {
+      email: updatedUser.email,
+      permissions: updatedUser.permissions,
+    });
+    this.addToast({
+      type: 'info',
+      title: 'Ruolo Simulato Aggiornato',
+      message: `Ruolo impostato a: ${newRole.toUpperCase()} (Permessi ricalcolati)`,
+      duration: 3000,
+    });
+  };
+
+  public hasPermission = (permission: UserPermissionV1): boolean => {
+    return hasUserPermission(this.state.user, permission, this.state.isDebugMode);
+  };
+
+  public canAccessDiagnostics = (): boolean => {
+    return canAccessTestingTools(this.state.user, this.state.isDebugMode);
   };
 
   public setInitialized = (initialized: boolean) => {
@@ -229,7 +280,7 @@ class Store {
       this.setState({ isLoading: false });
       return profile;
     } catch (err: any) {
-      const parsed = parseAuthError(err, this.state.currentLang);
+      const parsed = parseAuthError(err, this.state.currentLang, this.state.isDebugMode);
       this.setState({
         isLoading: false,
         lastError: parsed.message,

@@ -33,6 +33,11 @@
         "lastLoginAt": {
           "type": "string",
           "maxLength": 64
+        },
+        "role": {
+          "type": "string",
+          "enum": ["superadmin", "admin", "operator", "member", "guest"],
+          "maxLength": 32
         }
       },
       "required": ["uid", "email", "displayName", "registeredAt", "lastLoginAt"]
