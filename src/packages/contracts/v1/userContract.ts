@@ -66,7 +66,12 @@ export const UserDetailResourceContractV1 = z.object({
   version: z.literal('v1').default('v1'),
   identity: UserIdentitySchemaV1,
   session: UserSessionSchemaV1.optional(),
-  access: UserResourceAccessSchemaV1.default({}),
+  access: UserResourceAccessSchemaV1.default({
+    role: 'member',
+    permissions: ['users:read', 'resources:read', 'audit:read'],
+    assignedResourcesCount: 1,
+    mfaEnabled: false,
+  }),
 });
 
 export type UserDetailResourceV1 = z.infer<typeof UserDetailResourceContractV1>;

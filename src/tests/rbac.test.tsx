@@ -15,7 +15,7 @@ import {
 import { store } from '../lib/store.ts';
 
 // Test harness component for useRoleAccess hook
-function HookTestComponent({ requiredRole, exactMatch }: { requiredRole: UserRole; exactMatch?: boolean }) {
+function HookTestComponent({ requiredRole, exactMatch }: { requiredRole: UserRole | string; exactMatch?: boolean }) {
   const { hasAccess, currentRole, isAdmin, isUser, isGuest } = useRoleAccess(requiredRole, { exactMatch });
   return (
     <div>
@@ -35,50 +35,54 @@ describe('RBAC Roles, useRoleAccess & RoleGuard', () => {
 
   describe('isRoleAuthorized & Hierarchy', () => {
     it('validates user roles using isUserRole type guard', () => {
+      expect(isUserRole('superadmin')).toBe(true);
       expect(isUserRole('admin')).toBe(true);
-      expect(isUserRole('user')).toBe(true);
+      expect(isUserRole('operator')).toBe(true);
+      expect(isUserRole('member')).toBe(true);
       expect(isUserRole('guest')).toBe(true);
-      expect(isUserRole('superadmin')).toBe(false);
       expect(isUserRole('invalid_role')).toBe(false);
       expect(isUserRole(null)).toBe(false);
       expect(isUserRole(123)).toBe(false);
     });
 
-    it('ranks roles hierarchically in ROLE_HIERARCHY (admin > user > guest)', () => {
-      expect(ROLE_HIERARCHY.admin).toBeGreaterThan(ROLE_HIERARCHY.user);
-      expect(ROLE_HIERARCHY.user).toBeGreaterThan(ROLE_HIERARCHY.guest);
+    it('ranks roles hierarchically in ROLE_HIERARCHY (superadmin > admin > operator > member > guest)', () => {
+      expect(ROLE_HIERARCHY.superadmin).toBeGreaterThan(ROLE_HIERARCHY.admin);
+      expect(ROLE_HIERARCHY.admin).toBeGreaterThan(ROLE_HIERARCHY.operator);
+      expect(ROLE_HIERARCHY.operator).toBeGreaterThan(ROLE_HIERARCHY.member);
+      expect(ROLE_HIERARCHY.member).toBeGreaterThan(ROLE_HIERARCHY.guest);
       expect(ROLE_RANKS).toBe(ROLE_HIERARCHY);
     });
 
-    it('normalizes roles and handles member as user', () => {
+    it('normalizes roles and handles member as default user', () => {
       expect(normalizeRole('admin')).toBe('admin');
-      expect(normalizeRole('superadmin')).toBe('admin');
-      expect(normalizeRole('member')).toBe('user');
-      expect(normalizeRole('user')).toBe('user');
+      expect(normalizeRole('superadmin')).toBe('superadmin');
+      expect(normalizeRole('operator')).toBe('operator');
+      expect(normalizeRole('member')).toBe('member');
+      expect(normalizeRole('user')).toBe('member');
       expect(normalizeRole('guest')).toBe('guest');
       expect(normalizeRole(null)).toBe('guest');
     });
 
-    it('allows admin hierarchical access to user and guest levels', () => {
+    it('allows admin hierarchical access to member and guest levels', () => {
       expect(isRoleAuthorized('admin', 'admin')).toBe(true);
-      expect(isRoleAuthorized('admin', 'user')).toBe(true);
+      expect(isRoleAuthorized('admin', 'member')).toBe(true);
       expect(isRoleAuthorized('admin', 'guest')).toBe(true);
     });
 
-    it('allows user access to user and guest, but denies admin', () => {
-      expect(isRoleAuthorized('user', 'admin')).toBe(false);
-      expect(isRoleAuthorized('user', 'user')).toBe(true);
-      expect(isRoleAuthorized('user', 'guest')).toBe(true);
+    it('allows member access to member and guest, but denies admin', () => {
+      expect(isRoleAuthorized('member', 'admin')).toBe(false);
+      expect(isRoleAuthorized('member', 'member')).toBe(true);
+      expect(isRoleAuthorized('member', 'guest')).toBe(true);
     });
 
     it('restricts guest to guest only', () => {
       expect(isRoleAuthorized('guest', 'admin')).toBe(false);
-      expect(isRoleAuthorized('guest', 'user')).toBe(false);
+      expect(isRoleAuthorized('guest', 'member')).toBe(false);
       expect(isRoleAuthorized('guest', 'guest')).toBe(true);
     });
 
     it('respects exactMatch when specified', () => {
-      expect(isRoleAuthorized('admin', 'user', true)).toBe(false);
+      expect(isRoleAuthorized('admin', 'member', true)).toBe(false);
       expect(isRoleAuthorized('admin', 'admin', true)).toBe(true);
     });
   });
@@ -116,7 +120,7 @@ describe('RBAC Roles, useRoleAccess & RoleGuard', () => {
 
       render(<HookTestComponent requiredRole="admin" />);
       expect(screen.getByTestId('hasAccess').textContent).toBe('false');
-      expect(screen.getByTestId('currentRole').textContent).toBe('user');
+      expect(screen.getByTestId('currentRole').textContent).toBe('member');
       expect(screen.getByTestId('isAdmin').textContent).toBe('false');
       expect(screen.getByTestId('isUser').textContent).toBe('true');
     });
@@ -179,7 +183,7 @@ describe('RBAC Roles, useRoleAccess & RoleGuard', () => {
       });
 
       const { container } = render(
-        <RoleGuard requiredRole="user">
+        <RoleGuard requiredRole="member">
           <div>Members Area</div>
         </RoleGuard>
       );

@@ -3,40 +3,32 @@ import { UserPermissionV1, UserRoleV1, UserProfile } from './types.ts';
 import { useAuthStore } from './store.ts';
 
 /**
- * 1. Definizione dell'Enum e Tipo UserRole
- * Include ADMIN, USER, GUEST come richiesto dalla specifica RBAC.
+ * 1. Definizione dell'insieme unico dei ruoli utente standard
+ * Unificato con i contratti v1, il datastore Firestore e il runtime.
  */
-export enum UserRole {
-  ADMIN = 'admin',
-  USER = 'user',
-  GUEST = 'guest',
-}
-
-/** Tipo unione che accetta sia l'enum UserRole che le stringhe letterali per massima flessibilità */
-export type RoleInput = UserRole | `${UserRole}` | 'admin' | 'user' | 'guest';
+export type UserRole = UserRoleV1;
 
 export const USER_ROLES: readonly UserRole[] = [
-  UserRole.ADMIN,
-  UserRole.USER,
-  UserRole.GUEST,
+  'superadmin',
+  'admin',
+  'operator',
+  'member',
+  'guest',
 ] as const;
 
 /**
- * 2. Definizione della gerarchia: admin (3) > user (2) > guest (1)
- * admin: accesso completo di amministrazione, include i permessi di user e guest
- * user:  accesso per membri autenticati, include i permessi di guest
- * guest: accesso base e di sola consultazione
+ * 2. Definizione della gerarchia:
+ * superadmin (4) > admin (3) > operator (2) > member (1) > guest (0)
  */
-export const ROLE_HIERARCHY: Record<string, number> = {
-  [UserRole.ADMIN]: 3,
-  [UserRole.USER]: 2,
-  [UserRole.GUEST]: 1,
+export const ROLE_HIERARCHY: Record<UserRole, number> = {
+  superadmin: 4,
   admin: 3,
-  user: 2,
-  guest: 1,
+  operator: 2,
+  member: 1,
+  guest: 0,
 };
 
-/** Alias per compatibilità con test esistenti */
+/** Alias per compatibilità */
 export const ROLE_RANKS = ROLE_HIERARCHY;
 
 export const BOOTSTRAPPED_ADMIN_EMAILS: readonly string[] = [
@@ -47,37 +39,32 @@ export const BOOTSTRAPPED_ADMIN_EMAILS: readonly string[] = [
  * 3. Type Guard per verificare se un valore sconosciuto è un UserRole valido
  */
 export function isUserRole(value: unknown): value is UserRole {
-  return (
-    typeof value === 'string' &&
-    (value === UserRole.ADMIN ||
-      value === UserRole.USER ||
-      value === UserRole.GUEST ||
-      value === 'admin' ||
-      value === 'user' ||
-      value === 'guest')
-  );
+  return typeof value === 'string' && (USER_ROLES as readonly string[]).includes(value);
 }
 
 /**
- * Normalizza qualsiasi variante o alias di ruolo nel trio standard (admin, user, guest)
+ * Normalizza qualsiasi variante o alias di ruolo nel trio standard (admin, member, guest)
+ * Supporta 'user' mappandolo su 'member'.
  */
 export function normalizeRole(role?: string | null): UserRole {
-  if (!role) return UserRole.GUEST;
+  if (!role) return 'guest';
   const clean = role.toLowerCase().trim();
-  if (clean === 'admin' || clean === 'superadmin') return UserRole.ADMIN;
-  if (clean === 'guest') return UserRole.GUEST;
-  // 'member', 'operator', 'user' mappano allo standard 'user'
-  return UserRole.USER;
+  if (clean === 'superadmin') return 'superadmin';
+  if (clean === 'admin') return 'admin';
+  if (clean === 'operator') return 'operator';
+  if (clean === 'guest') return 'guest';
+  // 'member', 'user' mappano allo standard 'member'
+  return 'member';
 }
 
 /**
  * 4. Funzione helper per determinare se il ruolo garantisce l'accesso richiesto
- * Valutazione gerarchica di default: admin (3) >= user (2) >= guest (1)
+ * Valutazione gerarchica di default: superadmin > admin > operator > member > guest
  * Con exactMatch: true, richiede corrispondenza esatta senza ereditarietà
  */
 export function hasRequiredRole(
   currentRole: unknown,
-  requiredRole: RoleInput,
+  requiredRole: UserRole | string,
   exactMatch = false
 ): boolean {
   const normalizedCurrent = normalizeRole(typeof currentRole === 'string' ? currentRole : null);
@@ -112,7 +99,7 @@ export interface RoleAccessResult {
   /** Profilo utente corrente dallo store */
   user: UserProfile | null;
   /** Metodo per verificare dinamicamente altri ruoli */
-  isAuthorizedFor: (role: RoleInput, exact?: boolean) => boolean;
+  isAuthorizedFor: (role: UserRole | string, exact?: boolean) => boolean;
 }
 
 /**
@@ -120,7 +107,7 @@ export interface RoleAccessResult {
  * sul ruolo dell'utente memorizzato nello store Firebase
  */
 export function useRoleAccess(
-  requiredRole: RoleInput = UserRole.GUEST,
+  requiredRole: UserRole | string = 'guest',
   options?: UseRoleAccessOptions
 ): RoleAccessResult {
   const { user, isDebugMode } = useAuthStore();
@@ -128,7 +115,7 @@ export function useRoleAccess(
   const hasAccess =
     isDebugMode || hasRequiredRole(user?.role, requiredRole, options?.exactMatch);
 
-  const isAuthorizedFor = (role: RoleInput, exact = false): boolean => {
+  const isAuthorizedFor = (role: UserRole | string, exact = false): boolean => {
     if (isDebugMode) return true;
     return hasRequiredRole(user?.role, role, exact);
   };
@@ -137,9 +124,9 @@ export function useRoleAccess(
     hasAccess,
     currentRole,
     rawRole: user?.role,
-    isAdmin: currentRole === UserRole.ADMIN,
-    isUser: currentRole === UserRole.USER || currentRole === UserRole.ADMIN,
-    isGuest: currentRole === UserRole.GUEST,
+    isAdmin: currentRole === 'admin' || currentRole === 'superadmin',
+    isUser: currentRole !== 'guest',
+    isGuest: currentRole === 'guest',
     user,
     isAuthorizedFor,
   };
@@ -147,7 +134,7 @@ export function useRoleAccess(
 
 export interface RoleGuardProps {
   /** Ruolo minimo richiesto per visualizzare il contenuto */
-  requiredRole: RoleInput;
+  requiredRole: UserRole | string;
   /** Se true, richiede corrispondenza esatta senza ereditarietà */
   exactMatch?: boolean;
   /** Contenuto facoltativo di fallback da mostrare se non autorizzato */
@@ -213,12 +200,7 @@ export const ROLE_PERMISSIONS_MAP: Record<UserRoleV1, UserPermissionV1[]> = {
   ],
 };
 
-export const ALL_ROLES: readonly UserRoleV1[] = [
-  'admin',
-  'operator',
-  'member',
-  'guest',
-] as const;
+export const ALL_ROLES: readonly UserRoleV1[] = USER_ROLES;
 
 export const ALL_PERMISSIONS: readonly {
   id: UserPermissionV1;
